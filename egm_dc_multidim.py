@@ -1,22 +1,22 @@
 import numpy as np
 import tools
 
-def EGM (sol,z_plus,p, t,par): 
+def EGM (sol,T_plus,p, t,par): 
 
     #if z_plus == 1:     #Retired =  Not working
     #    w_raw, avg_marg_u_plus = retired(sol,z_plus,p,t,par)
     #else:               # Working
     #    w_raw, avg_marg_u_plus = working(sol,z_plus,p,t,par)
 
-    w_raw, avg_marg_u_plus = first_step(sol,z_plus,p,t,par)
+    w_raw, avg_marg_u_plus = first_step(sol,T_plus,p,t,par)
 
     # raw c, m and v
     c_raw = inv_marg_util(par.beta*par.R*avg_marg_u_plus,par)
     m_raw = c_raw + par.grid_a[t,:]
    
     # Upper Envelope
-    c,v = c_raw, m_raw
-    #c,v = upper_envelope(t,z_plus,c_raw,m_raw,w_raw,par)
+    #c,v = c_raw, m_raw
+    c,v = upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par)
     
     return c,v
 
@@ -28,9 +28,9 @@ def first_step(sol, T_plus, h, t, par):
     w = np.tile(par.xi_w,(par.Na,1))
 
     # Next period states, T_i[0] is exercise, T_i[1] is work
-    h_plus = (1 - par.gamma) * h + par.kappa * T_plus[0]  # health next period 
+    h_plus = (1 - par.gamma + par.kappa * (T_plus[0]) / (1050)) * h  # health next period 
     wage_plus = np.exp(h_plus) * par.Rh * xi # next period wage w. health effect on wage 
-    m_plus = par.R * a + wage_plus * T_plus[1]
+    m_plus = par.R * a + wage_plus * (T_plus[1]) / (3000)
 
     # Value, consumption, marg_util
     shape = (par.T_boundles.shape[0],m_plus.size)
@@ -101,7 +101,57 @@ def working(sol,z_plus,p, t,par):
 
     return w_raw, avg_marg_u_plus
 
-def upper_envelope(t,z_plus,c_raw,m_raw,w_raw,par):
+
+def upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par):
+    
+    # Add a point at the bottom
+    c_raw = np.append(1e-6,c_raw)  
+    m_raw = np.append(1e-6,m_raw) 
+    a_raw = np.append(0,par.grid_a[t,:]) 
+    w_raw = np.append(w_raw[0],w_raw)
+
+    # Initialize c and v   
+    c = np.nan + np.zeros((par.Nm))
+    v = -np.inf + np.zeros((par.Nm))
+    
+    # Loop through the endogenous grid
+    size_m_raw = m_raw.size
+    for i in range(size_m_raw-1):    
+
+        c_now = c_raw[i]        
+        m_low = m_raw[i]
+        m_high = m_raw[i+1]
+        c_slope = (c_raw[i+1]-c_now)/(m_high-m_low)
+        
+        w_now = w_raw[i]
+        a_low = a_raw[i]
+        a_high = a_raw[i+1]
+        w_slope = (w_raw[i+1]-w_now)/(a_high-a_low)
+
+        # Loop through the common grid
+        for j, m_now in enumerate(par.grid_m):
+
+            interp = (m_now >= m_low) and (m_now <= m_high) 
+            extrap_above = (i == size_m_raw-1) and (m_now > m_high)
+
+            if interp or extrap_above:
+                # Consumption
+                c_guess = c_now+c_slope*(m_now-m_low)
+                
+                # post-decision values
+                a_guess = m_now - c_guess
+                w = w_now+w_slope*(a_guess-a_low)
+                
+                # Value of choice
+                v_guess = util(c_guess,T_plus,par)+par.beta*w
+                
+                # Update
+                if v_guess >v[j]:
+                    v[j]=v_guess
+                    c[j]=c_guess
+    return c,v
+
+def upper_envelope_real(t,z_plus,c_raw,m_raw,w_raw,par):
     
     # Add a point at the bottom
     c_raw = np.append(1e-6,c_raw)  
@@ -154,8 +204,12 @@ def upper_envelope(t,z_plus,c_raw,m_raw,w_raw,par):
 
 
 # FUNCTIONS
-def util(c,L,par):
-    return ((c**(1.0-par.rho))/(1.0-par.rho)-par.alpha*(1-L))
+def util(c, T, par):
+    # negative utility conditional on working
+    L = 0
+    if T[1] > 0:
+        L = 1
+    return ((c**(1.0-par.rho))/(1.0-par.rho)- par.alpha * L  )
 
 
 def marg_util(c,par):
@@ -197,7 +251,7 @@ def logsum(v1,v2,sigma):
 """
 
 def logsum(V, sigma):
-    # Maximum over the discrete choices (0 = for each columns, i.e., for each "competing choice")
+    # Maximum over the discrete choices (0 = for each column, i.e., for each "competing choice")
     mxm = V.max(0)
 
     # numerically robust log-sum
@@ -205,5 +259,5 @@ def logsum(V, sigma):
 
     # d. numerically robust probability
     prob = np.exp((V- log_sum) / sigma)    
-    
+
     return log_sum,prob
