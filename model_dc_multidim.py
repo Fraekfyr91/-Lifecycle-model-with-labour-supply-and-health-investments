@@ -59,11 +59,10 @@ class model_dc_multidim():
         
     def create_hour_bunches(self):
         exercise = np.array([0, 0.25, 0.5, 1, 1.5, 2, 3]) * 7 * 50 # yearly exercise              
-        work = np.array([0, 1000, 2000, 2250, 2500, 3000])               # from Iskhakov and Keane (2021)
-        hour_boundles = []
-        for e_h in exercise:
-            for w_h in work:
-                hour_boundles.append([e_h, w_h])
+        work = np.array([0, 1000, 2000, 2250, 2500, 3000])         # from Iskhakov and Keane (2021)
+        hour_boundles = []                                         # Data container for work and exercise
+        for e_h, w_h in zip(exercise,work): 
+            hour_boundles.append([e_h, w_h])                       # append(work and exercise boundle
         return np.array(hour_boundles)
     
     def create_grids(self):
