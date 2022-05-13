@@ -19,7 +19,7 @@ class model_dc_multidim():
 
         par = self.par
 
-        par.T = 20
+        par.T = 5
 
         # Model parameters
         par.rho = 2
@@ -105,6 +105,8 @@ class model_dc_multidim():
         sol.c = np.nan+np.zeros(shape)
         sol.v = np.nan+np.zeros(shape)
         
+        
+        
         # Last period, (= consume all) 
         for i_h in range(par.Nh):
             for i_t, T_plus in enumerate(par.T_boundles):
@@ -123,5 +125,6 @@ class model_dc_multidim():
 
                     # Solve model with EGM
                     c,v = egm.EGM(sol,T_plus,p,t,par)
+                    
                     sol.c[t,i_t,:,i_h] = c
                     sol.v[t,i_t,:,i_h] = v
