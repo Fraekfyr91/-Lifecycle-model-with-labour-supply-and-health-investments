@@ -3,7 +3,7 @@ import numpy as np
 import tools
 from types import SimpleNamespace
 import egm_dc_multidim as egm
-from numba import njit, int64, double, boolean, int32,void
+
 
 class model_dc_multidim():
 
@@ -25,9 +25,10 @@ class model_dc_multidim():
         par.rho = 2
         par.beta = 0.96
         par.alpha = 0.75
+        par.kappa = 0.5
         par. R = 1.04
         par.W = 1
-        par.sigma_xi = 0.05
+        par.sigma_xi = 0.1
         par.sigma_eta = 0.1
 
         # Grids and numerical integration
@@ -35,37 +36,19 @@ class model_dc_multidim():
         par.m_phi = 1.1 # Curvature parameters
         par.a_max = 10
         par.a_phi = 1.1  # Curvature parameters
-        par.h_max = 1.0
+        par.p_max = 2.0
         par.p_phi = 1.0 # Curvature parameters
 
         par.Nxi = 8
         par.Nm = 150
         par.Na = 150
-        par.Nh = 100
-
-        par.NTh = 7 # number of possible exercise bundles 
-
-        par.kappa = 0.05   # abilty to transfer exercise into health
-        par.gamma = 0.05  # health decay
+        par.Np = 100
 
         par.Nm_b = 50
-
-        par.Rh = 1
-
-         # 6. simulation
-        par.sim_mini = 2.5 # initial m in simulation
-        par.simN = 100000 # number of persons in simulation
-        par.simT = 10 # number of periods in simulation
         
-    def create_hour_bunches(self):
-        exercise = np.array([0, 0.25, 0.5, 1, 1.5, 2, 3]) * 7 * 50 # yearly exercise              
-        work = np.array([0, 1000, 2000, 2250, 2500, 3000])         # from Iskhakov and Keane (2021)
-        hour_boundles = []                                         # Data container for work and exercise
-        for e_h, w_h in zip(exercise,work): 
-            hour_boundles.append([e_h, w_h])                       # append(work and exercise boundle
-        return np.array(hour_boundles)
-    
+
     def create_grids(self):
+
         par = self.par
 
         # Check parameters
@@ -73,52 +56,49 @@ class model_dc_multidim():
 
         # Shocks
         par.xi,par.xi_w = tools.GaussHermite_lognorm(par.sigma_xi,par.Nxi)
-        print(par.xi)
-
+        
         # End of period assets
         par.grid_a = np.nan + np.zeros([par.T,par.Na])
         for t in range(par.T):
             par.grid_a[t,:] = tools.nonlinspace(0+1e-6,par.a_max,par.Na,par.a_phi)
 
         # Cash-on-hand
-        par.grid_m =  np.concatenate([np.linspace(0+1e-6,1-1e-6,par.Nm_b), tools.nonlinspace(1+1e-6,par.m_max,par.Nm-par.Nm_b,par.m_phi)]) 
+        par.grid_m =  np.concatenate([np.linspace(0+1e-6,1-1e-6,par.Nm_b), tools.nonlinspace(1+1e-6,par.m_max,par.Nm-par.Nm_b,par.m_phi)])    # Permanent income
 
-        # Health states
-        par.grid_h = tools.nonlinspace(0+1e-4,par.h_max,par.Nh,par.p_phi)
-        par.T_boundles = self.create_hour_bunches()
-        par.NT = par.T_boundles.shape[0]
+        # Permanent income
+        par.grid_p = tools.nonlinspace(0+1e-4,par.p_max,par.Np,par.p_phi)
 
-        par.Nshocks = par.xi * par.Na
         # Set seed
         np.random.seed(2020)
 
-    def solve(self, print_iteration_number = True):
+    def solve(self):
+        
         # Initialize
         par = self.par
         sol = self.sol
 
-        shape=(par.T, par.NT, par.Nm, par.Nh)
+        shape=(par.T,2,par.Nm,par.Np)
         sol.m = np.nan+np.zeros(shape)
         sol.c = np.nan+np.zeros(shape)
         sol.v = np.nan+np.zeros(shape)
         
         # Last period, (= consume all) 
-        for i_h in range(par.Nh):
-            for i_t, T_plus in enumerate(par.T_boundles):
-                sol.m[par.T-1,i_t,:,i_h] = par.grid_m
-                sol.c[par.T-1,i_t,:,i_h] = par.grid_m
-                sol.v[par.T-1,i_t,:,i_h] = egm.util(sol.c[par.T-1,i_t,:,i_h],T_plus,par)
-        
+        for i_p in range(par.Np):
+            for z_plus in range(2):
+                sol.m[par.T-1,z_plus,:,i_p] = par.grid_m
+                sol.c[par.T-1,z_plus,:,i_p] = par.grid_m
+                sol.v[par.T-1,z_plus,:,i_p] = egm.util(sol.c[par.T-1,z_plus,:,i_p],z_plus,par)
+
         # Before last period
-        # T_plus is time choice [T^w, T^H], e.g. [5, 10]
         for t in range(par.T-2,-1,-1):
-            if print_iteration_number:
-                print(f'Evaluating period: {t}')
+
             #Choice specific function
-            for i_h, p in enumerate(par.grid_h):
-                for i_t, T_plus in enumerate(par.T_boundles):
+            for i_p, p in enumerate(par.grid_p):
+            
+                for z_plus in range(2):
 
                     # Solve model with EGM
-                    c,v = egm.EGM(sol,T_plus,p,t,par)
-                    sol.c[t,i_t,:,i_h] = c
-                    sol.v[t,i_t,:,i_h] = v
+                    c,v = egm.EGM(sol,z_plus,p,t,par)
+                    sol.c[t,z_plus,:,i_p] = c
+                    sol.v[t,z_plus,:,i_p] = v
+                
