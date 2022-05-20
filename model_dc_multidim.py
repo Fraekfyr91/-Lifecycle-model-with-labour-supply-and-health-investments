@@ -66,6 +66,7 @@ class model_dc_multidim():
         for e_h in exercise:
             for w_h in work:
                 hour_boundles.append([e_h, w_h])                       # append(work and exercise boundle
+        hour_boundles = np.array([[0,0], [550,2000], [0,2000], [1000,2500], [550,2500], [550,3000], [0,3000]])        
         return np.array(hour_boundles)
     
     def create_grids(self):

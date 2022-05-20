@@ -29,7 +29,7 @@ def human_capital(t, health):
     inc2=0.0003
     
     age = t + 19
-    return( (1 + 0.4*health) * np.exp(inc0 + inc1*age - inc2*age**2))
+    return( (2*health) * np.exp(inc0 + inc1*age - inc2*age**2))
 
 def first_step(sol, T_plus, h, t, par):
     # Prepare
@@ -57,7 +57,8 @@ def first_step(sol, T_plus, h, t, par):
     
         # Choice specific consumption    
         c_plus[i,:] = tools.interp_2d_vec(par.grid_m, par.grid_h, sol.c[t+1,i], m_plus, h_plus)
-       
+        c_plus[i,:] = np.maximum(c_plus[i,:], 0.001)
+            
         # Choice specific Marginal utility
         marg_u_plus[i,:] = marg_util(c_plus[i,:], par) 
        
@@ -110,7 +111,7 @@ def upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par):
             if interp or extrap_above:
                 # Consumption
                 c_guess = c_now+c_slope*(m_now-m_low)
-                
+                c_guess = np.maximum(c_guess, 0.001)
                 # post-decision values
                 a_guess = m_now - c_guess
                 w = w_now+w_slope*(a_guess-a_low)
@@ -129,14 +130,14 @@ def v(T, t, par):
     work_h = T[1]
     exercise_h = T[0]
     gamma_1 = {0: 0, 1000: 1.4139, 2000: 2.0088, 2250: 2.9213, 2500: 2.8639, 3000: 3.8775}
-    gamma_2 = 0.1
+    gamma_2 = 0.2
     gamma_3 = 0.3
     
     # disutility from working and exercise that increaes with age -> hopefully it will make agents stop working when old, and make exercise more costly
     kappa_2 = 0.00004 
     kappa_1 = 0.00008
     
-    return gamma_1[work_h]*0.1 + kappa_1 * (t-40)**2 * (t > 40) + gamma_2 * (exercise_h > 0) + gamma_3 * (exercise_h > 500) + kappa_2 * (t-40) ** 2 * (t > 40) * (exercise_h > 0)
+    return gamma_1[work_h]*0.2 + kappa_1 * (t-40)**2 * (t > 40) + gamma_2 * (exercise_h > 0) + gamma_3 * (exercise_h > 500) + kappa_2 * (t-40) ** 2 * (t > 40) * (exercise_h > 0)
 
 def util(c,T,t,par):
     work_h = T[1]
