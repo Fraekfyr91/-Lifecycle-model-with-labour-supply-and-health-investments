@@ -19,7 +19,7 @@ class model_dc_multidim():
 
         par = self.par
 
-        par.T = 5
+        par.T = 70
 
         # Model parameters
         par.rho = 0.5
@@ -112,7 +112,7 @@ class model_dc_multidim():
             for i_t, T_plus in enumerate(par.T_boundles):
                 sol.m[par.T-1,i_t,:,i_h] = par.grid_m
                 sol.c[par.T-1,i_t,:,i_h] = par.grid_m
-                sol.v[par.T-1,i_t,:,i_h] = egm.util(sol.c[par.T-1,i_t,:,i_h],T_plus,par)
+                sol.v[par.T-1,i_t,:,i_h] = egm.util(sol.c[par.T-1,i_t,:,i_h],T_plus,par.T-1,par)
         
         # Before last period
         # T_plus is time choice [T^w, T^H], e.g. [5, 10]

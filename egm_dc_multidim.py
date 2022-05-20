@@ -22,12 +22,14 @@ def EGM (sol,T_plus,p, t,par):
 
 
 def human_capital(t, health):
+    # see plot, increases with age up untill a certain point
+    
     inc0=0.75
     inc1=0.04
-    inc2=0.0002
+    inc2=0.0003
     
     age = t + 19
-    return health * np.exp(inc0 + inc1*age - inc2*age**2)
+    return( (1 + 0.4*health) * np.exp(inc0 + inc1*age - inc2*age**2))
 
 def first_step(sol, T_plus, h, t, par):
     # Prepare
@@ -37,10 +39,9 @@ def first_step(sol, T_plus, h, t, par):
     w = np.tile(par.xi_w,(par.Na,1))
 
     # Next period states, T_i[0] is exercise, T_i[1] is work
-    h_plus = (1 - par.gamma + par.kappa * (T_plus[0]) / (1050)) * h  # health next period 
     
-    wage_plus = human_capital(t, h_plus) * xi # next period wage w. health effect on wage 
-
+    h_plus = (1 - par.gamma + par.kappa * (T_plus[0]) / (1092) -0.01 * (t > 40) ) * h  # health next period 
+    wage_plus = human_capital(t, h_plus) * xi # next period wage w, health effect on wage 
     m_plus = par.R * a + wage_plus * T_plus[1] / 3000
 
     # Value, consumption, marg_util
@@ -115,7 +116,7 @@ def upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par):
                 w = w_now+w_slope*(a_guess-a_low)
                 
                 # Value of choice
-                v_guess = util(c_guess,T_plus,par)+par.beta*w
+                v_guess = util(c_guess,T_plus, t,par)+par.beta*w
                 
                 # Update
                 if v_guess >v[j]:
@@ -123,16 +124,25 @@ def upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par):
                     c[j]=c_guess
     return c,v
 
-
-def util(c,T,par):
+# disutility from working fun
+def v(T, t, par):
     work_h = T[1]
     exercise_h = T[0]
-    
     gamma_1 = {0: 0, 1000: 1.4139, 2000: 2.0088, 2250: 2.9213, 2500: 2.8639, 3000: 3.8775}
-    gamma_2 = 0.05
-    gamma_3 = 0.2
+    gamma_2 = 0.1
+    gamma_3 = 0.3
     
-    return (c**(1.0-par.rho))/(1.0-par.rho) - gamma_1[work_h]*0.1 - gamma_2 * (exercise_h > 0) - gamma_3 * (exercise_h > 500)
+    # disutility from working and exercise that increaes with age -> hopefully it will make agents stop working when old, and make exercise more costly
+    kappa_2 = 0.00004 
+    kappa_1 = 0.00008
+    
+    return gamma_1[work_h]*0.1 + kappa_1 * (t-40)**2 * (t > 40) + gamma_2 * (exercise_h > 0) + gamma_3 * (exercise_h > 500) + kappa_2 * (t-40) ** 2 * (t > 40) * (exercise_h > 0)
+
+def util(c,T,t,par):
+    work_h = T[1]
+    exercise_h = T[0]
+
+    return (c**(1.0-par.rho))/(1.0-par.rho) - v(T, t, par)
 
 
 def marg_util(c,par):
