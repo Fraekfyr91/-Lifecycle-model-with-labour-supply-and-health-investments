@@ -187,8 +187,8 @@ def v(T, t, par):
     gamma_3 = 0.3
     
     # disutility from working and exercise that increaes with age -> hopefully it will make agents stop working when old, and make exercise more costly
-    kappa_2 = 0.00004 
-    kappa_1 = 0.00008
+    kappa_2 = 0.0002
+    kappa_1 = 0.0001
     
     return gamma_1[work_h]*0.2 + kappa_1 * (t-40)**2 * (t > 40) + gamma_2 * (exercise_h > 0) + gamma_3 * (exercise_h > 500) + kappa_2 * (t-40) ** 2 * (t > 40) * (exercise_h > 0)
 
