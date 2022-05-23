@@ -2,36 +2,79 @@ import numpy as np
 import tools
 
 def EGM (sol,T_plus,p, t,par): 
+    
+    if T_plus[1] == 0:     #Retired =  Not working
+        w_raw, avg_marg_u_plus = retired(sol,T_plus,p,t,par)
+    else:               # Working
+        w_raw, avg_marg_u_plus = working(sol,T_plus,p,t,par)
 
-    #if z_plus == 1:     #Retired =  Not working
-    #    w_raw, avg_marg_u_plus = retired(sol,z_plus,p,t,par)
-    #else:               # Working
-    #    w_raw, avg_marg_u_plus = working(sol,z_plus,p,t,par)
-
-    w_raw, avg_marg_u_plus = first_step(sol,T_plus,p,t,par)
+    #w_raw, avg_marg_u_plus = first_step(sol,T_plus,p,t,par)
 
     # raw c, m and v
     c_raw = inv_marg_util(par.beta*par.R*avg_marg_u_plus,par)
     m_raw = c_raw + par.grid_a[t,:]
    
     # Upper Envelope
-    #c,v = c_raw, m_raw
     c,v = upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par)
     
     return c,v
 
+def retired(sol, T_plus, h, t, par):
+    # Prepare
+    xi = np.tile(par.xi,par.Na)
+    h = np.tile(h, par.Na*par.Nxi)
+    a = np.repeat(par.grid_a[t],par.Nxi) 
+    w = np.tile(par.xi_w,(par.Na,1))
 
-def human_capital(t, health):
-    # see plot, increases with age up untill a certain point
+    # Next period states
+    h_plus = (1 - par.gamma + par.kappa * (T_plus[0]) / (1092) -0.02 * (t > 40) ) * h  # health next period 
+    #wage_plus = human_capital(t, h_plus) * xi # next period wage w, health effect on wage 
+    m_plus = par.R * a #+ wage_plus * T_plus[1] / 3000
     
-    inc0=0.75
-    inc1=0.04
-    inc2=0.0003
-    
-    age = t + 19
-    return( (2*health) * np.exp(inc0 + inc1*age - inc2*age**2))
+    # Value, consumption, marg_util
+    shape = (par.T_boundles.shape[0],m_plus.size)
+    v_plus = np.nan+np.zeros(shape)
+    c_plus = np.nan+np.zeros(shape)
+    marg_u_plus = np.nan+np.zeros(shape)
 
-def first_step(sol, T_plus, h, t, par):
+    
+    
+    #hour_boundles = np.array([[0,0], [1000,0], [550,0]])
+    # range over possible hours next period
+    for i, T_i in enumerate(par.T_boundles):
+        # Choice specific value
+        v_plus[i,:] = tools.interp_2d_vec(par.grid_m, par.grid_h, sol.v[t+1,i], m_plus, h_plus)
+    
+        # Choice specific consumption    
+        c_plus[i,:] = tools.interp_2d_vec(par.grid_m, par.grid_h, sol.c[t+1,i], m_plus, h_plus)
+        c_plus[i,:] = np.maximum(c_plus[i,:], 0.001)
+            
+        # Choice specific Marginal utility
+        marg_u_plus[i,:] = marg_util(c_plus[i,:], par) 
+    # value
+    w_raw = tools.interp_2d_vec(par.grid_m, par.grid_h,sol.v[t+1,T_plus[1]], m_plus, h_plus)
+    
+    # Consumption
+    c_plus = tools.interp_2d_vec(par.grid_m, par.grid_h,sol.c[t+1,T_plus[1]], m_plus, h_plus)
+       
+        
+        
+    # Expected value
+    V_plus, prob = logsum(v_plus, par.sigma_eta) 
+    w_raw = w*np.reshape(V_plus,(par.Na,par.Nxi))
+    w_raw = np.sum(w_raw,1) 
+    marg_u_plus = np.sum(prob * marg_u_plus, axis = 0)
+
+    #Expected  average marg. utility
+    avg_marg_u_plus = w*np.reshape(marg_u_plus,(par.Na,par.Nxi))
+    avg_marg_u_plus = np.sum(avg_marg_u_plus ,1)
+    
+
+
+    return w_raw, avg_marg_u_plus
+
+
+def working(sol, T_plus, h, t, par):
     # Prepare
     xi = np.tile(par.xi,par.Na)
     h = np.tile(h, par.Na*par.Nxi)
@@ -73,6 +116,16 @@ def first_step(sol, T_plus, h, t, par):
     avg_marg_u_plus = np.sum(avg_marg_u_plus ,1)
 
     return w_raw, avg_marg_u_plus
+def human_capital(t, health):
+    # see plot, increases with age up untill a certain point
+    
+    inc0=0.75
+    inc1=0.04
+    inc2=0.0003
+    
+    age = t + 19
+    return( (2*health) * np.exp(inc0 + inc1*age - inc2*age**2))
+
 
 
 
@@ -143,7 +196,7 @@ def util(c,T,t,par):
     work_h = T[1]
     exercise_h = T[0]
 
-    return (c**(1.0-par.rho))/(1.0-par.rho) - v(T, t, par)
+    return (c**(1.0-par.rho))/(1.0-par.rho) - 2*v(T, t, par)
 
 
 def marg_util(c,par):
