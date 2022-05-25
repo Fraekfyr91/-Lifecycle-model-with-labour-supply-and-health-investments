@@ -9,13 +9,13 @@ def EGM (sol,T_plus,p, t,par):
         w_raw, avg_marg_u_plus = working(sol,T_plus,p,t,par)
 
     #w_raw, avg_marg_u_plus = first_step(sol,T_plus,p,t,par)
-
+    delta = death_chance(t,p)
     # raw c, m and v
-    c_raw = inv_marg_util(par.beta*par.R*avg_marg_u_plus,par)
+    c_raw = inv_marg_util(delta*par.beta*par.R*avg_marg_u_plus,par)
     m_raw = c_raw + par.grid_a[t,:]
    
     # Upper Envelope
-    c,v = upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par)
+    c,v = upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par, p)
     
     return c,v
 
@@ -25,12 +25,16 @@ def retired(sol, T_plus, h, t, par):
     h = np.tile(h, par.Na*par.Nxi)
     a = np.repeat(par.grid_a[t],par.Nxi) 
     w = np.tile(par.xi_w,(par.Na,1))
-
+    
+    # pension 
+    age = t+19
+    p = 3 * (age >65) 
     # Next period states
+  
     h_plus = (1 - par.gamma + par.kappa * (T_plus[0]) / (1092) -0.02 * (t > 40) ) * h  # health next period 
     #wage_plus = human_capital(t, h_plus) * xi # next period wage w, health effect on wage 
-    m_plus = par.R * a #+ wage_plus * T_plus[1] / 3000
-    
+    m_plus = par.R * a  #+ wage_plus * T_plus[1] / 3000
+    m_plus += p
     # Value, consumption, marg_util
     shape = (par.T_boundles.shape[0],m_plus.size)
     v_plus = np.nan+np.zeros(shape)
@@ -124,12 +128,17 @@ def human_capital(t, health):
     inc2=0.0003
     
     age = t + 19
-    return( (2*health) * np.exp(inc0 + inc1*age - inc2*age**2))
+    return( (health>0)*np.exp(health) * np.exp(inc0 + inc1*age - inc2*age**2))
 
 
+def death_chance(t, h):
+    age = t+19
+    from_age = 0.0006569 * (np.exp(0.1078507 * (age - 40)) - 1) * (age >= 40)
+    from_health =1/(1-h**2)
+    return 1 -from_age - from_health
 
 
-def upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par):
+def upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par, h):
     
     # Add a point at the bottom
     c_raw = np.append(1e-6,c_raw)  
@@ -170,7 +179,9 @@ def upper_envelope(t,T_plus,c_raw,m_raw,w_raw,par):
                 w = w_now+w_slope*(a_guess-a_low)
                 
                 # Value of choice
-                v_guess = util(c_guess,T_plus, t,par)+par.beta*w
+                v_guess = util(c_guess,T_plus,t,par, h)+par.beta*w + par.beta*death_chance(t, h)*w
+                # + (1-death_chance(t)) * util_bequest(a_guess, par)
+                #v_guess = util(c_guess,T_plus, t,par)+par.beta*w
                 
                 # Update
                 if v_guess >v[j]:
@@ -183,8 +194,9 @@ def v(T, t, par):
     work_h = T[1]
     exercise_h = T[0]
     gamma_1 = {0: 0, 1000: 1.4139, 2000: 2.0088, 2250: 2.9213, 2500: 2.8639, 3000: 3.8775}
-    gamma_2 = 0.2
-    gamma_3 = 0.3
+    #gamma_1 = {0: 0, 1000: 1.4139*1.5, 2000: 2.0088*1.5, 2250: 2.9213*1.5, 2500: 2.8639*1.5, 3000: 3.8775*1.5}
+    gamma_2 = 0.001
+    gamma_3 = 0.002
     
     # disutility from working and exercise that increaes with age -> hopefully it will make agents stop working when old, and make exercise more costly
     kappa_2 = 0.0002
@@ -192,11 +204,13 @@ def v(T, t, par):
     
     return gamma_1[work_h]*0.2 + kappa_1 * (t-40)**2 * (t > 40) + gamma_2 * (exercise_h > 0) + gamma_3 * (exercise_h > 500) + kappa_2 * (t-40) ** 2 * (t > 40) * (exercise_h > 0)
 
-def util(c,T,t,par):
+def util(c,T,t,par, h):
+    
     work_h = T[1]
+    L = round(T[1]/(T[1]+0.00000001))
     exercise_h = T[0]
-
-    return (c**(1.0-par.rho))/(1.0-par.rho) - 2*v(T, t, par)
+    h_scale = 5
+    return (c**(1.0-par.rho))/(1.0-par.rho)-par.rho*(1-L) - 0*v(T, t, par) +h_scale * np.log(h*t)
 
 
 def marg_util(c,par):

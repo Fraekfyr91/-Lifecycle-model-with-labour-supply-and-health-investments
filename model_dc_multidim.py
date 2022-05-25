@@ -39,8 +39,8 @@ class model_dc_multidim():
         par.p_phi = 1.0 # Curvature parameters
 
         par.Nxi = 8
-        par.Nm = 200
-        par.Na = 200
+        par.Nm = 100
+        par.Na = 100
         par.Nh = 100
 
         par.NTh = 7 # number of possible exercise bundles 
@@ -113,7 +113,8 @@ class model_dc_multidim():
             for i_t, T_plus in enumerate(par.T_boundles):
                 sol.m[par.T-1,i_t,:,i_h] = par.grid_m
                 sol.c[par.T-1,i_t,:,i_h] = par.grid_m
-                sol.v[par.T-1,i_t,:,i_h] = egm.util(sol.c[par.T-1,i_t,:,i_h],T_plus,par.T-1,par)
+                # h= 0 = dead
+                sol.v[par.T-1,i_t,:,i_h] = egm.util(sol.c[par.T-1,i_t,:,i_h],T_plus,par.T-1,par, h = 0)
         
         # Before last period
         # T_plus is time choice [T^w, T^H], e.g. [5, 10]
@@ -122,10 +123,19 @@ class model_dc_multidim():
                 print(f'Evaluating period: {t}')
             #Choice specific function
             for i_h, p in enumerate(par.grid_h):
+                #if p < 0.001:
+                #    for i_t, T_plus in enumerate(par.T_boundles):
+                #        T_plus = [0,0]
+                #        # Solve model with EGM
+                #        c,v = egm.EGM(sol,T_plus,p,t,par)
+                #        sol.c[t,i_t,:,i_h] = c
+                #        sol.v[t,i_t,:,i_h] = v
+                #        continue
+                #else:
                 for i_t, T_plus in enumerate(par.T_boundles):
 
                     # Solve model with EGM
                     c,v = egm.EGM(sol,T_plus,p,t,par)
-                    
+
                     sol.c[t,i_t,:,i_h] = c
                     sol.v[t,i_t,:,i_h] = v
